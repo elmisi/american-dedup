@@ -408,7 +408,7 @@ class ScanScreen(Screen):
 
         def progress_callback(message: str, percentage: int):
             """Handle progress updates from fdupes."""
-            self.call_from_thread(self._update_progress, message, percentage)
+            self.app.call_from_thread(self._update_progress, message, percentage)
 
         result = run_fdupes(self.app.selected_folders, progress_callback)
         self.logger.info(f"=== END _run_fdupes worker, output: {len(result)} chars ===")
