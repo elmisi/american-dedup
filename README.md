@@ -11,6 +11,12 @@ A terminal user interface (TUI) application for finding and managing duplicate f
 
 **Safe by design**: This application **never deletes files**. Duplicates are moved to a timestamped folder (`__dup_YYYYMMDD_HHMMSS`), preserving the original directory structure. You can review the moved files and delete them manually when you're confident they're no longer needed.
 
+## Screenshots
+
+![Main Screen](screenshots/01_main_screen.svg)
+
+![Folder Selection](screenshots/03_folders_selected.svg)
+
 ## Features
 
 - **Two-panel folder selection**: Select folders to scan and mark target folders for deduplication
@@ -116,6 +122,18 @@ Or if installed via pip:
 ```bash
 pip uninstall american-dedup
 ```
+
+## Development
+
+### Regenerating Screenshots
+
+After UI changes, regenerate the documentation screenshots:
+
+```bash
+.venv/bin/python scripts/take_screenshots.py
+```
+
+Screenshots are saved as SVG files in the `screenshots/` directory.
 
 ## License
 
