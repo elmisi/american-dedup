@@ -151,6 +151,10 @@ def run_fdupes(
     # Read output, filtering fdupes progress lines
     output_lines: list[str] = []
     total_lines = 0
+    last_percentage = -1
+    last_building_update = 0
+    import time
+
     for line in process.stdout:
         total_lines += 1
         stripped = line.strip()
@@ -161,14 +165,22 @@ def run_fdupes(
             current = int(progress_match.group(1))
             total = int(progress_match.group(2))
             percentage = int(progress_match.group(3))
-            if on_progress:
-                on_progress(f"Comparing files: {current}/{total}", percentage)
+
+            # Throttle: only update UI when percentage changes
+            if percentage != last_percentage:
+                last_percentage = percentage
+                if on_progress:
+                    on_progress(f"Comparing files: {current}/{total}", percentage)
             continue
 
         # Skip fdupes progress lines (e.g., "Building file list - \ | /")
         if stripped and stripped.startswith("Building file list"):
-            if on_progress:
-                on_progress("Building file list...", -1)  # -1 = indeterminate
+            # Throttle: max once per second for "building file list"
+            now = time.time()
+            if now - last_building_update >= 1.0:
+                last_building_update = now
+                if on_progress:
+                    on_progress("Building file list...", -1)  # -1 = indeterminate
             continue
 
         # Keep actual output lines
