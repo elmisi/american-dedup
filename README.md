@@ -5,6 +5,12 @@ A terminal user interface (TUI) application for finding and managing duplicate f
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
 
+## Key Principles
+
+**Priority-based deduplication**: You decide which folders have priority. Duplicates are moved FROM target folders while files in non-target folders are always kept. This gives you full control over which copies to preserve.
+
+**Safe by design**: This application **never deletes files**. Duplicates are moved to a timestamped folder (`__dup_YYYYMMDD_HHMMSS`), preserving the original directory structure. You can review the moved files and delete them manually when you're confident they're no longer needed.
+
 ## Features
 
 - **Two-panel folder selection**: Select folders to scan and mark target folders for deduplication
@@ -38,7 +44,7 @@ sudo pacman -S fdupes
 ### From source
 
 ```bash
-git clone https://github.com/yourusername/american-dedup.git
+git clone https://github.com/elmisi/american-dedup.git
 cd american-dedup
 ./install.sh
 ```
