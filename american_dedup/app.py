@@ -3,13 +3,14 @@
 from textual.app import App
 from textual.binding import Binding
 
+from . import __version__
 from .screens import MainSelectScreen, UndoScreen
 
 
 class AmericanDedupApp(App):
     """TUI application for managing duplicate files using fdupes."""
 
-    TITLE = "american-dedup"
+    TITLE = f"american-dedup v{__version__}"
     ENABLE_COMMAND_PALETTE = False
 
     CSS = """
