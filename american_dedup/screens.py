@@ -323,10 +323,15 @@ class ScanScreen(Screen):
         margin: 2;
         text-align: center;
     }
-    #spinner {
+    #progress-container {
         margin: 2 4;
+    }
+    #progress-bar {
+        margin: 0 2;
+    }
+    #progress-label {
+        margin: 1 2;
         text-align: center;
-        text-style: bold;
     }
     #output {
         height: 1fr;
@@ -336,13 +341,15 @@ class ScanScreen(Screen):
     }
     """
 
-    SPINNER_CHARS = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
-
     def compose(self) -> ComposeResult:
         """Create child widgets."""
+        from textual.widgets import ProgressBar
+
         yield Header()
         yield Static("Scanning...", id="status")
-        yield Static("", id="spinner")
+        with Container(id="progress-container"):
+            yield ProgressBar(id="progress-bar", show_eta=False, total=100)
+            yield Static("Initializing...", id="progress-label")
         yield VerticalScroll(id="output")
         yield Footer()
 
@@ -352,48 +359,19 @@ class ScanScreen(Screen):
         self.start_time = time.time()
         self.fdupes_output = ""
         self.scan_done = False
-        self.spinner_idx = 0
 
-        status = self.query_one("#status", Static)
-        status.update("Counting files...")
-
-        self.run_worker(self._count_files, thread=True)
-
-    def _count_files(self) -> int:
-        """Worker: count files in selected folders."""
-        from .core import count_files
-
-        self.logger.info("=== START count_files ===")
-        total = count_files(self.app.selected_folders)
-        self.logger.info(f"count_files completed: {total} files")
-        return total
+        # Start fdupes directly
+        self.logger.info("Starting fdupes scan...")
+        self.run_worker(self._run_fdupes, thread=True)
 
     def on_worker_state_changed(self, event) -> None:
         """Handle worker state changes."""
-        from .core import analyze_duplicates, run_fdupes
+        from .core import analyze_duplicates
 
         if event.state.name == "SUCCESS":
             result = event.worker.result
 
-            if isinstance(result, int):
-                # count_files completed
-                self.total_files = result
-                status = self.query_one("#status", Static)
-                output = self.query_one("#output", VerticalScroll)
-
-                status.update(f"Scanning {self.total_files} files with fdupes...")
-                output.mount(Static(f"Total files to scan: {self.total_files}"))
-                output.mount(Static("=" * 60))
-                output.mount(
-                    Static("fdupes produces output only at the end of the scan")
-                )
-
-                self.set_interval(0.1, self._update_spinner)
-
-                self.logger.info("Starting run_fdupes worker...")
-                self.run_worker(self._run_fdupes, thread=True)
-
-            elif isinstance(result, str):
+            if isinstance(result, str):
                 # run_fdupes completed
                 self.logger.info(f"run_fdupes completed, output length: {len(result)}")
                 self.fdupes_output = result
@@ -401,10 +379,12 @@ class ScanScreen(Screen):
 
                 status = self.query_one("#status", Static)
                 output = self.query_one("#output", VerticalScroll)
-                spinner = self.query_one("#spinner", Static)
+                progress_bar = self.query_one("#progress-bar")
+                progress_label = self.query_one("#progress-label", Static)
 
                 elapsed = int(time.time() - self.start_time)
-                spinner.update(f"Completed in {elapsed}s")
+                progress_bar.update(total=100, progress=100)
+                progress_label.update(f"Completed in {elapsed}s")
                 output.mount(Static(f"Scan completed in {elapsed}s"))
 
                 status.update("Analyzing results...")
@@ -425,9 +405,32 @@ class ScanScreen(Screen):
         from .core import run_fdupes
 
         self.logger.info("=== START _run_fdupes worker ===")
-        result = run_fdupes(self.app.selected_folders, None)
+
+        def progress_callback(message: str, percentage: int):
+            """Handle progress updates from fdupes."""
+            self.call_from_thread(self._update_progress, message, percentage)
+
+        result = run_fdupes(self.app.selected_folders, progress_callback)
         self.logger.info(f"=== END _run_fdupes worker, output: {len(result)} chars ===")
         return result
+
+    def _update_progress(self, message: str, percentage: int) -> None:
+        """Update progress bar and label."""
+        if self.scan_done:
+            return
+
+        elapsed = int(time.time() - self.start_time)
+        progress_bar = self.query_one("#progress-bar")
+        progress_label = self.query_one("#progress-label", Static)
+
+        if percentage < 0:
+            # Indeterminate progress (building file list)
+            progress_bar.update(total=None)  # Indeterminate mode
+            progress_label.update(f"{message} - {elapsed}s")
+        else:
+            # Determinate progress (comparing files)
+            progress_bar.update(total=100, progress=percentage)
+            progress_label.update(f"{message} - {elapsed}s")
 
     def _analyze(self) -> dict:
         """Worker: analyze duplicates."""
@@ -442,18 +445,6 @@ class ScanScreen(Screen):
         )
         self.logger.info(f"=== END _analyze worker, groups: {result.get('groups', 0)} ===")
         return result
-
-    def _update_spinner(self) -> None:
-        """Update spinner animation."""
-        if self.scan_done:
-            return
-
-        elapsed = int(time.time() - self.start_time)
-        self.spinner_idx = (self.spinner_idx + 1) % len(self.SPINNER_CHARS)
-        spinner_char = self.SPINNER_CHARS[self.spinner_idx]
-
-        spinner = self.query_one("#spinner", Static)
-        spinner.update(f"{spinner_char}  Scanning... {elapsed}s  {spinner_char}")
 
 
 class PreviewScreen(Screen):

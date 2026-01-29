@@ -111,7 +111,7 @@ def count_files(folders: list[str]) -> int:
 
 def run_fdupes(
     folders: list[str],
-    on_progress: Optional[Callable[[str], None]] = None
+    on_progress: Optional[Callable[[str, int], None]] = None
 ) -> str:
     """
     Run fdupes on the specified folders.
@@ -120,11 +120,13 @@ def run_fdupes(
 
     Args:
         folders: List of folder paths to scan.
-        on_progress: Optional callback for progress updates.
+        on_progress: Optional callback for progress updates (message, percentage).
 
     Returns:
         Raw fdupes output as a string.
     """
+    import re
+
     cmd = ["fdupes", "-c", "-r", "-1"] + folders
 
     logger.info("=== START run_fdupes ===")
@@ -132,7 +134,7 @@ def run_fdupes(
     logger.info(f"Folders: {folders}")
 
     if on_progress:
-        on_progress(f"Command: {' '.join(cmd[:4])}... ({len(folders)} folders)")
+        on_progress(f"Starting scan of {len(folders)} folders...", 0)
 
     process = subprocess.Popen(
         cmd,
@@ -143,8 +145,8 @@ def run_fdupes(
     )
     logger.info(f"fdupes started, PID: {process.pid}")
 
-    if on_progress:
-        on_progress(f"fdupes started (PID: {process.pid})")
+    # Regex to parse "Progress [X/Y] Z%"
+    progress_pattern = re.compile(r'Progress \[(\d+)/(\d+)\] (\d+)%')
 
     # Read output, filtering fdupes progress lines
     output_lines: list[str] = []
@@ -152,11 +154,26 @@ def run_fdupes(
     for line in process.stdout:
         total_lines += 1
         stripped = line.strip()
+
+        # Check for progress line with percentage
+        progress_match = progress_pattern.search(stripped)
+        if progress_match:
+            current = int(progress_match.group(1))
+            total = int(progress_match.group(2))
+            percentage = int(progress_match.group(3))
+            if on_progress:
+                on_progress(f"Comparing files: {current}/{total}", percentage)
+            continue
+
         # Skip fdupes progress lines (e.g., "Building file list - \ | /")
-        if stripped and not stripped.startswith("Building file list"):
+        if stripped and stripped.startswith("Building file list"):
+            if on_progress:
+                on_progress("Building file list...", -1)  # -1 = indeterminate
+            continue
+
+        # Keep actual output lines
+        if stripped:
             output_lines.append(line)
-        if on_progress:
-            on_progress(stripped)
 
     process.wait()
 
