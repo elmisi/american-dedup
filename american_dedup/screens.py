@@ -589,7 +589,6 @@ class ExecuteScreen(Screen):
 
     def _run_move(self) -> None:
         """Execute the move operation."""
-        from .config import save_undo_info
         from .core import execute_move
 
         async def do_move():
@@ -622,8 +621,6 @@ class ExecuteScreen(Screen):
                 while not future.done():
                     await asyncio.sleep(0.05)
                 result_data = future.result()
-
-            save_undo_info(result_data["moves"], dest_dir)
 
             stats = result_data["stats"]
             status.update("Completed!")
@@ -873,7 +870,6 @@ cleaning up backup/download folders.
 • Files are NEVER deleted
 • Duplicates are moved to a timestamped folder (__dup_YYYYMMDD_HHMMSS)
 • Original directory structure is preserved
-• You can undo the last move operation
 
 [bold cyan]Keyboard Shortcuts[/bold cyan]
 
