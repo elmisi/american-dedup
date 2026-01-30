@@ -777,7 +777,7 @@ class SaveConfigScreen(Screen):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button press."""
-        if event.button.id == "cancel-btn":
+        if event.button.id in ("cancel-btn", "cancel-overwrite-btn"):
             self.app.pop_screen()
         elif event.button.id == "save-btn":
             self._save_config()
@@ -806,7 +806,7 @@ class SaveConfigScreen(Screen):
             buttons = self.query_one("#buttons", Horizontal)
             for child in list(buttons.children):
                 child.remove()
-            buttons.mount(Button("Cancel", id="cancel-btn"))
+            buttons.mount(Button("Cancel", id="cancel-overwrite-btn"))
             buttons.mount(Button("Overwrite", id="overwrite-btn", variant="warning"))
         else:
             self._do_save()
