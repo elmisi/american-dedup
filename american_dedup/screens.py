@@ -157,10 +157,6 @@ class MainSelectScreen(Screen):
     }
     """
 
-    BINDINGS = [
-        ("escape", "app.pop_screen", "Back"),
-    ]
-
     def __init__(self, initial_path: str = "/") -> None:
         """
         Initialize the main selection screen.
@@ -172,7 +168,6 @@ class MainSelectScreen(Screen):
         self.initial_path = initial_path
         self.scan_folders: list[str] = []
         self.target_folders: set[str] = set()
-        self.selected_index: int | None = None
         self.include_internal: bool = False
         self.loaded_config_name: str | None = None
 
@@ -185,7 +180,6 @@ class MainSelectScreen(Screen):
                 yield VerticalScroll(id="scan-list")
                 with Horizontal(classes="box-buttons"):
                     yield Button("+ Add", id="add-scan")
-                    yield Button("- Remove", id="remove-scan")
 
             with Container(id="target-box", classes="folder-box"):
                 yield Static("Target Folders", classes="box-title")
@@ -213,8 +207,6 @@ class MainSelectScreen(Screen):
                 FolderPickerModal(self.initial_path),
                 callback=self._on_folder_selected,
             )
-        elif event.button.id == "remove-scan":
-            self._remove_selected_folder()
         elif event.button.id == "load-config":
             self.app.push_screen(LoadConfigScreen(), callback=self._on_config_loaded)
         elif event.button.id == "save-config":
@@ -256,17 +248,6 @@ class MainSelectScreen(Screen):
             self._refresh_lists()
             self._update_scan_button()
 
-    def _remove_selected_folder(self) -> None:
-        """Remove the currently selected folder."""
-        if (
-            self.selected_index is not None
-            and 0 <= self.selected_index < len(self.scan_folders)
-        ):
-            folder = self.scan_folders.pop(self.selected_index)
-            self.target_folders.discard(folder)
-            self.selected_index = None
-            self._refresh_lists()
-            self._update_scan_button()
 
     def _refresh_lists(self) -> None:
         """Refresh the folder lists display."""
@@ -274,10 +255,8 @@ class MainSelectScreen(Screen):
         for child in list(scan_list.children):
             child.remove()
 
-        for i, folder in enumerate(self.scan_folders):
+        for folder in self.scan_folders:
             item = Static(f"  {folder}", classes="folder-item")
-            if i == self.selected_index:
-                item.add_class("selected")
             scan_list.mount(item)
 
         target_list = self.query_one("#target-list", VerticalScroll)
@@ -816,6 +795,9 @@ class SaveConfigScreen(Screen):
         if not name:
             return
 
+        # Store name for later use (after UI is modified)
+        self.config_name_to_save = name
+
         configs = load_saved_configs()
         if name in configs:
             # Show confirmation
@@ -836,9 +818,8 @@ class SaveConfigScreen(Screen):
         """Actually save the configuration."""
         from .config import save_config
 
-        name = self.query_one("#name-input", Input).value
-        if name:
-            save_config(name, self.folders, self.sources, self.include_internal)
+        if hasattr(self, 'config_name_to_save') and self.config_name_to_save:
+            save_config(self.config_name_to_save, self.folders, self.sources, self.include_internal)
             self.app.pop_screen()
 
 class HelpScreen(Screen):
