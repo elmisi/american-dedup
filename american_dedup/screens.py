@@ -174,6 +174,7 @@ class MainSelectScreen(Screen):
         self.target_folders: set[str] = set()
         self.selected_index: int | None = None
         self.include_internal: bool = False
+        self.loaded_config_name: str | None = None
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
@@ -187,7 +188,7 @@ class MainSelectScreen(Screen):
                     yield Button("- Remove", id="remove-scan")
 
             with Container(id="target-box", classes="folder-box"):
-                yield Static("Target Folders (duplicates moved)", classes="box-title")
+                yield Static("Target Folders (will be deduplicated)", classes="box-title")
                 yield VerticalScroll(id="target-list")
 
         yield Static(
@@ -223,6 +224,7 @@ class MainSelectScreen(Screen):
                         self.scan_folders,
                         list(self.target_folders),
                         self.include_internal,
+                        self.loaded_config_name,
                     )
                 )
         elif event.button.id == "scan-btn":
@@ -240,11 +242,12 @@ class MainSelectScreen(Screen):
             self._update_scan_button()
 
     def _on_config_loaded(
-        self, result: tuple[list[str], list[str], bool] | None
+        self, result: tuple[str, list[str], list[str], bool] | None
     ) -> None:
         """Handle configuration load callback."""
         if result:
-            folders, sources, include_internal = result
+            name, folders, sources, include_internal = result
+            self.loaded_config_name = name
             self.scan_folders = folders
             self.target_folders = set(sources)
             self.include_internal = include_internal
@@ -547,6 +550,10 @@ class PreviewScreen(Screen):
         # Focus tree for arrow key navigation
         tree.focus()
 
+        # Disable execute button if no files to move
+        execute_btn = self.query_one("#execute-btn", Button)
+        execute_btn.disabled = len(analysis['files_to_move']) == 0
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button press."""
         if event.button.id == "back-btn":
@@ -754,7 +761,7 @@ class UndoScreen(Screen):
         asyncio.create_task(do_undo())
 
 
-class LoadConfigScreen(ModalScreen[tuple[list[str], list[str], bool] | None]):
+class LoadConfigScreen(ModalScreen[tuple[str, list[str], list[str], bool] | None]):
     """Modal screen for loading a saved configuration."""
 
     CSS = """
@@ -828,7 +835,7 @@ class LoadConfigScreen(ModalScreen[tuple[list[str], list[str], bool] | None]):
         folders = data.get("folders", [])
         sources = data.get("sources", [])
         include_internal = data.get("include_internal", False)
-        self.dismiss((folders, sources, include_internal))
+        self.dismiss((name, folders, sources, include_internal))
 
 
 class SaveConfigScreen(Screen):
@@ -851,6 +858,7 @@ class SaveConfigScreen(Screen):
         folders: list[str],
         sources: list[str],
         include_internal: bool = False,
+        loaded_name: str | None = None,
     ) -> None:
         """
         Initialize the save config screen.
@@ -859,18 +867,24 @@ class SaveConfigScreen(Screen):
             folders: List of folders to scan.
             sources: List of target folders.
             include_internal: Whether to include internal duplicates.
+            loaded_name: Name of loaded config to pre-fill.
         """
         super().__init__()
         self.folders = folders
         self.sources = sources
         self.include_internal = include_internal
+        self.loaded_name = loaded_name
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
         yield Header()
         yield Container(
             Static("Configuration name:"),
-            Input(placeholder="e.g. backup_drive", id="name-input"),
+            Input(
+                placeholder="e.g. backup_drive",
+                value=self.loaded_name or "",
+                id="name-input",
+            ),
             id="input-container",
         )
         yield Horizontal(
@@ -885,9 +899,153 @@ class SaveConfigScreen(Screen):
         if event.button.id == "cancel-btn":
             self.app.pop_screen()
         elif event.button.id == "save-btn":
-            from .config import save_config
+            self._save_config()
+        elif event.button.id == "overwrite-btn":
+            self._do_save()
 
-            name = self.query_one("#name-input", Input).value
-            if name:
-                save_config(name, self.folders, self.sources, self.include_internal)
-                self.app.pop_screen()
+    def _save_config(self) -> None:
+        """Check if config exists and save or ask for confirmation."""
+        from .config import load_saved_configs
+
+        name = self.query_one("#name-input", Input).value
+        if not name:
+            return
+
+        configs = load_saved_configs()
+        if name in configs:
+            # Show confirmation
+            container = self.query_one("#input-container", Container)
+            for child in list(container.children):
+                child.remove()
+            container.mount(Static(f"Config '{name}' already exists. Overwrite?"))
+
+            buttons = self.query_one("#buttons", Horizontal)
+            for child in list(buttons.children):
+                child.remove()
+            buttons.mount(Button("Cancel", id="cancel-btn"))
+            buttons.mount(Button("Overwrite", id="overwrite-btn", variant="warning"))
+        else:
+            self._do_save()
+
+    def _do_save(self) -> None:
+        """Actually save the configuration."""
+        from .config import save_config
+
+        name = self.query_one("#name-input", Input).value
+        if name:
+            save_config(name, self.folders, self.sources, self.include_internal)
+            self.app.pop_screen()
+
+class HelpScreen(Screen):
+    """Help screen with program philosophy and keyboard shortcuts."""
+
+    CSS = """
+    HelpScreen {
+        align: center middle;
+    }
+    #help-container {
+        width: 80%;
+        height: 90%;
+        border: solid $primary;
+        background: $surface;
+        padding: 2;
+    }
+    #help-content {
+        height: 1fr;
+        overflow-y: auto;
+    }
+    #close-btn {
+        dock: bottom;
+        width: 100%;
+        margin-top: 1;
+    }
+    """
+
+    BINDINGS = [
+        ("escape", "app.pop_screen", "Close"),
+    ]
+
+    def compose(self) -> ComposeResult:
+        """Create child widgets."""
+        with Container(id="help-container"):
+            with VerticalScroll(id="help-content"):
+                yield Static(
+                    """[bold]american-dedup - Help[/bold]
+
+[bold cyan]Philosophy[/bold cyan]
+
+american-dedup uses a priority-based deduplication approach:
+• You select which folders to scan for duplicates
+• You mark "target" folders where duplicates will be REMOVED
+• Files in non-target folders are ALWAYS kept (high priority)
+• When duplicates span both types, only target copies are moved
+
+This gives you full control: preserve your important folders while
+cleaning up backup/download folders.
+
+[bold]Safety First[/bold]
+• Files are NEVER deleted
+• Duplicates are moved to a timestamped folder (__dup_YYYYMMDD_HHMMSS)
+• Original directory structure is preserved
+• You can undo the last move operation
+
+[bold cyan]Keyboard Shortcuts[/bold cyan]
+
+[bold]Global:[/bold]
+  F1       - Show this help screen
+  q        - Quit the application
+  u        - Undo last move operation
+  Escape   - Go back / Close modal
+
+[bold]Main Screen:[/bold]
+  Enter    - Select highlighted folder
+  ↑/↓      - Navigate folder list
+  Tab      - Move between sections
+
+[bold]Preview Screen:[/bold]
+  ←/→      - Expand/collapse tree nodes
+  ↑/↓      - Navigate tree
+
+[bold cyan]Workflow[/bold cyan]
+
+1. [bold]Select Folders[/bold]
+   Click "+ Add" to add folders to scan
+
+2. [bold]Mark Targets[/bold]
+   Check boxes for folders where duplicates should be removed
+
+3. [bold]Configure Options[/bold]
+   Enable "Include duplicates within target folders" if needed
+
+4. [bold]Scan[/bold]
+   Click "Scan" to run fdupes and analyze duplicates
+
+5. [bold]Preview[/bold]
+   Review which files will be moved (🔴) vs kept (🟢)
+
+6. [bold]Execute[/bold]
+   Click "Execute Move" to move duplicates
+
+7. [bold]Undo (if needed)[/bold]
+   Press 'u' to restore files from last move
+
+[bold cyan]Configuration Management[/bold cyan]
+
+• Click "Load Config" to reuse saved folder selections
+• Click "Save Config" to save current setup for later
+• Loaded configs can be overwritten with same name
+
+[bold cyan]Credits[/bold cyan]
+
+• Built with Textual (https://textual.textualize.io)
+• Uses fdupes for duplicate detection
+• Licensed under MIT
+""",
+                    markup=True,
+                )
+            yield Button("Close", id="close-btn", variant="primary")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button press."""
+        if event.button.id == "close-btn":
+            self.app.pop_screen()

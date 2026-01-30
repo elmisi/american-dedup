@@ -28,6 +28,7 @@ class AmericanDedupApp(App):
     BINDINGS = [
         Binding("q", "quit", "Quit"),
         Binding("u", "undo", "Undo"),
+        Binding("f1", "help", "Help"),
     ]
 
     def __init__(self, start_path: str = "/") -> None:
@@ -52,6 +53,11 @@ class AmericanDedupApp(App):
     def action_undo(self) -> None:
         """Handle undo action."""
         self.push_screen(UndoScreen())
+
+    def action_help(self) -> None:
+        """Handle help action."""
+        from .screens import HelpScreen
+        self.push_screen(HelpScreen())
 
 
 def main(start_path: str = "/") -> None:
