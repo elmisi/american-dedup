@@ -188,7 +188,7 @@ class MainSelectScreen(Screen):
                     yield Button("- Remove", id="remove-scan")
 
             with Container(id="target-box", classes="folder-box"):
-                yield Static("Target Folders (will be deduplicated)", classes="box-title")
+                yield Static("Target Folders", classes="box-title")
                 yield VerticalScroll(id="target-list")
 
         yield Static(
@@ -665,101 +665,6 @@ class ExecuteScreen(Screen):
             self.app.exit()
 
 
-class UndoScreen(Screen):
-    """Screen for undoing the last move operation."""
-
-    CSS = """
-    #info {
-        margin: 2;
-        padding: 1;
-        border: solid yellow;
-    }
-    #progress {
-        margin: 2 4;
-    }
-    #result {
-        margin: 2;
-    }
-    #buttons {
-        dock: bottom;
-        height: auto;
-        align: center middle;
-        margin-bottom: 1;
-    }
-    """
-
-    def compose(self) -> ComposeResult:
-        """Create child widgets."""
-        yield Header()
-        yield Static("", id="info")
-        yield ProgressBar(id="progress")
-        yield Static("", id="result")
-        yield Horizontal(
-            Button("Cancel", id="cancel-btn"),
-            Button("Restore", id="undo-btn", variant="warning"),
-            id="buttons",
-        )
-        yield Footer()
-
-    def on_mount(self) -> None:
-        """Handle screen mount."""
-        from .config import load_undo_info
-
-        info = self.query_one("#info", Static)
-        undo_info = load_undo_info()
-
-        if not undo_info:
-            info.update("No move operation to undo.")
-            self.query_one("#undo-btn", Button).disabled = True
-        else:
-            moves = undo_info.get("moves", [])
-            dest = undo_info.get("dest_dir", "")
-            info.update(
-                f"Last move operation:\n"
-                f"  Files: {len(moves)}\n"
-                f"  Folder: {dest}"
-            )
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle button press."""
-        if event.button.id == "cancel-btn":
-            self.app.pop_screen()
-        elif event.button.id == "undo-btn":
-            self._run_undo()
-
-    def _run_undo(self) -> None:
-        """Execute the undo operation."""
-        from .config import clear_undo_info, load_undo_info
-        from .core import undo_move
-
-        async def do_undo():
-            progress = self.query_one("#progress", ProgressBar)
-            result = self.query_one("#result", Static)
-            undo_btn = self.query_one("#undo-btn", Button)
-            cancel_btn = self.query_one("#cancel-btn", Button)
-
-            undo_btn.disabled = True
-            undo_info = load_undo_info()
-            moves = undo_info.get("moves", [])
-            progress.update(total=len(moves), progress=0)
-
-            def on_progress(i: int, total: int, path: str):
-                progress.update(progress=i)
-
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(undo_move, undo_info, on_progress)
-                while not future.done():
-                    await asyncio.sleep(0.05)
-                stats = future.result()
-
-            clear_undo_info()
-            result.update(
-                f"Restored: {stats['success']}\n" f"Errors: {stats['error']}"
-            )
-            cancel_btn.label = "Close"
-
-        asyncio.create_task(do_undo())
-
 
 class LoadConfigScreen(ModalScreen[tuple[str, list[str], list[str], bool] | None]):
     """Modal screen for loading a saved configuration."""
@@ -994,7 +899,6 @@ cleaning up backup/download folders.
 [bold]Global:[/bold]
   F1       - Show this help screen
   q        - Quit the application
-  u        - Undo last move operation
   Escape   - Go back / Close modal
 
 [bold]Main Screen:[/bold]
@@ -1026,8 +930,16 @@ cleaning up backup/download folders.
 6. [bold]Execute[/bold]
    Click "Execute Move" to move duplicates
 
-7. [bold]Undo (if needed)[/bold]
-   Press 'u' to restore files from last move
+[bold cyan]Restoring Files[/bold cyan]
+
+Moved files are preserved in a timestamped folder (__dup_YYYYMMDD_HHMMSS)
+with the original directory structure intact. To restore files:
+
+• Navigate to the timestamped folder
+• Copy/move files back to their original locations
+• The folder structure mirrors the original paths
+
+This approach gives you full control over what to restore.
 
 [bold cyan]Configuration Management[/bold cyan]
 

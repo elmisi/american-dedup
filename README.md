@@ -22,7 +22,7 @@ A terminal user interface (TUI) application for finding and managing duplicate f
 - **Two-panel folder selection**: Select folders to scan and mark target folders for deduplication
 - **Smart duplicate handling**: Files in target folders are moved, files in other folders are kept
 - **Preview before action**: See exactly which files will be moved and which will be kept
-- **Undo support**: Restore moved files to their original locations
+- **Real-time progress tracking**: See percentage and elapsed time during scan
 - **Save/load configurations**: Save folder selections for repeated use
 - **Internal duplicates option**: Optionally handle duplicates within target folders only
 
@@ -81,7 +81,7 @@ american-dedup [starting_path]
 ### Keyboard shortcuts
 
 - `q` - Quit the application
-- `u` - Open undo screen
+- `F1` - Open help screen
 - `Escape` - Go back to previous screen
 - Arrow keys - Navigate tree in preview screen
 
@@ -101,11 +101,19 @@ When duplicates exist only within target folders:
 
 Moved files are placed in a `__dup_YYYYMMDD_HHMMSS` folder, preserving the original folder structure.
 
+## Restoring Files
+
+If you need to restore moved files, they are preserved in the timestamped folder with the original directory structure intact:
+
+1. Navigate to the `__dup_YYYYMMDD_HHMMSS` folder
+2. Browse the preserved directory structure
+3. Copy or move files back to their original locations as needed
+
+This manual approach gives you full control over what to restore and when.
+
 ## Configuration
 
-Configurations are saved to `~/.config/american-dedup/`:
-- `saved_configs.json` - Named folder configurations
-- `last_move.json` - Undo information for the last move operation
+Configurations are saved to `~/.config/american-dedup/saved_configs.json`
 
 ## Logging
 

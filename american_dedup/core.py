@@ -54,11 +54,6 @@ class MoveResult(TypedDict):
     moves: list[tuple[str, str]]
 
 
-class UndoStats(TypedDict):
-    """Statistics for undo operation."""
-    success: int
-    error: int
-
 
 def parse_fdupes_line(line: str) -> list[str]:
     """
@@ -385,60 +380,6 @@ def execute_move(
     )
 
     return {"stats": stats, "moves": moves_done}
-
-
-def undo_move(
-    undo_info: dict,
-    on_progress: Optional[Callable[[int, int, str], None]] = None
-) -> UndoStats:
-    """
-    Restore previously moved files to their original locations.
-
-    Args:
-        undo_info: Dictionary with 'moves' list and 'dest_dir'.
-        on_progress: Optional callback(current, total, path) for progress.
-
-    Returns:
-        Undo statistics with success and error counts.
-    """
-    logger.info("=== START undo_move ===")
-
-    stats: UndoStats = {"success": 0, "error": 0}
-    moves = undo_info.get("moves", [])
-    logger.info(f"Files to restore: {len(moves)}")
-
-    total = len(moves)
-    for i, move in enumerate(moves, 1):
-        src = move["dst"]  # Reverse: dst becomes src
-        dst = move["src"]  # src becomes dst
-
-        if on_progress:
-            on_progress(i, total, dst)
-
-        try:
-            if not os.path.exists(src):
-                continue
-
-            os.makedirs(os.path.dirname(dst), exist_ok=True)
-            shutil.move(src, dst)
-            stats["success"] += 1
-        except Exception as e:
-            stats["error"] += 1
-            logger.warning(f"Error restoring {dst}: {e}")
-
-    # Remove duplicates folder if empty
-    dest_dir = undo_info.get("dest_dir")
-    if dest_dir and os.path.exists(dest_dir):
-        try:
-            shutil.rmtree(dest_dir)
-            logger.info(f"Removed duplicates folder: {dest_dir}")
-        except Exception as e:
-            logger.warning(f"Error removing folder {dest_dir}: {e}")
-
-    logger.info("=== END undo_move ===")
-    logger.info(f"Result: {stats['success']} restored, {stats['error']} errors")
-
-    return stats
 
 
 def format_size(size: int | float) -> str:

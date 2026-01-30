@@ -4,7 +4,7 @@ from textual.app import App
 from textual.binding import Binding
 
 from . import __version__
-from .screens import MainSelectScreen, UndoScreen
+from .screens import MainSelectScreen
 
 
 class AmericanDedupApp(App):
@@ -27,7 +27,6 @@ class AmericanDedupApp(App):
 
     BINDINGS = [
         Binding("q", "quit", "Quit"),
-        Binding("u", "undo", "Undo"),
         Binding("f1", "help", "Help"),
     ]
 
@@ -49,10 +48,6 @@ class AmericanDedupApp(App):
     def on_mount(self) -> None:
         """Handle application mount event."""
         self.push_screen(MainSelectScreen(self.start_path))
-
-    def action_undo(self) -> None:
-        """Handle undo action."""
-        self.push_screen(UndoScreen())
 
     def action_help(self) -> None:
         """Handle help action."""
